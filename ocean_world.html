@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐠 Ocean World - ท้องทะเลมหัศจรรย์</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #001133; font-family: 'Segoe UI', sans-serif; }
+  #canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+
+  /* HUD */
+  #hud {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,20,60,0.75); backdrop-filter: blur(12px);
+    border: 1px solid rgba(100,200,255,0.3); border-radius: 40px;
+    padding: 10px 28px; color: #7ee8ff; font-size: 13px;
+    letter-spacing: 1px; pointer-events: none;
+    text-shadow: 0 0 10px rgba(100,220,255,0.8);
+    box-shadow: 0 0 20px rgba(0,150,255,0.2);
+  }
+  #hud span { margin: 0 10px; }
+  #hud .key {
+    background: rgba(100,200,255,0.15); border: 1px solid rgba(100,200,255,0.4);
+    border-radius: 6px; padding: 2px 8px; font-weight: bold;
+  }
+
+  /* Upload Panel */
+  #upload-panel {
+    position: fixed; right: 20px; top: 50%; transform: translateY(-50%);
+    background: rgba(0,15,50,0.85); backdrop-filter: blur(16px);
+    border: 1px solid rgba(100,200,255,0.25); border-radius: 20px;
+    padding: 20px; width: 220px;
+    box-shadow: 0 0 30px rgba(0,100,200,0.3), inset 0 0 20px rgba(0,50,150,0.1);
+    color: #a0e8ff;
+  }
+  #upload-panel h3 {
+    font-size: 14px; letter-spacing: 2px; text-align: center;
+    color: #7ee8ff; margin-bottom: 14px; text-transform: uppercase;
+    text-shadow: 0 0 10px rgba(100,220,255,0.7);
+  }
+  #upload-panel .bubble-deco {
+    text-align: center; font-size: 28px; margin-bottom: 10px;
+  }
+
+  .upload-slot {
+    background: rgba(0,40,100,0.5); border: 2px dashed rgba(100,200,255,0.3);
+    border-radius: 14px; padding: 12px 8px; margin-bottom: 12px;
+    text-align: center; cursor: pointer; transition: all 0.3s;
+    position: relative; overflow: hidden;
+  }
+  .upload-slot:hover {
+    border-color: rgba(100,200,255,0.7);
+    background: rgba(0,60,140,0.5);
+    box-shadow: 0 0 15px rgba(0,150,255,0.3);
+  }
+  .upload-slot input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-slot .slot-label {
+    font-size: 11px; color: #60c8f0; letter-spacing: 1px; margin-top: 4px;
+  }
+  .upload-slot .slot-icon { font-size: 22px; }
+  .upload-slot .preview-img {
+    width: 100%; height: 70px; object-fit: cover;
+    border-radius: 8px; display: none; margin-bottom: 4px;
+  }
+
+  .btn-place {
+    width: 100%; padding: 10px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #0066cc, #00aaff);
+    color: white; font-size: 12px; letter-spacing: 1px; cursor: pointer;
+    transition: all 0.3s; margin-top: 4px;
+    box-shadow: 0 4px 15px rgba(0,150,255,0.4);
+  }
+  .btn-place:hover {
+    background: linear-gradient(135deg, #0088ff, #00ccff);
+    transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,180,255,0.5);
+  }
+
+  .divider {
+    height: 1px; background: linear-gradient(90deg, transparent, rgba(100,200,255,0.3), transparent);
+    margin: 14px 0;
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    pointer-events: none; width: 20px; height: 20px;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(100,220,255,0.7);
+    border-radius: 2px;
+  }
+  #crosshair::before { width: 2px; height: 20px; left: 50%; transform: translateX(-50%); }
+  #crosshair::after { width: 20px; height: 2px; top: 50%; transform: translateY(-50%); }
+
+  /* Depth meter */
+  #depth {
+    position: fixed; left: 20px; bottom: 30px;
+    background: rgba(0,15,50,0.8); backdrop-filter: blur(10px);
+    border: 1px solid rgba(100,200,255,0.25); border-radius: 14px;
+    padding: 12px 18px; color: #60c8f0; font-size: 12px; letter-spacing: 1px;
+  }
+  #depth .depth-val { font-size: 22px; font-weight: bold; color: #7ee8ff; display: block; }
+
+  /* Bubbles overlay */
+  #bubbles-overlay {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden;
+  }
+  .bubble {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, rgba(200,240,255,0.6), rgba(100,200,255,0.1));
+    border: 1px solid rgba(150,220,255,0.4);
+    animation: floatBubble linear infinite;
+  }
+  @keyframes floatBubble {
+    0% { transform: translateY(0) translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 0.5; }
+    100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+  }
+
+  /* Lock pointer notice */
+  #lock-notice {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,10,30,0.85); backdrop-filter: blur(10px);
+    z-index: 100; cursor: pointer; transition: opacity 0.5s;
+  }
+  #lock-notice .card {
+    text-align: center; padding: 50px 60px;
+    background: rgba(0,20,60,0.8); border: 1px solid rgba(100,200,255,0.3);
+    border-radius: 24px; box-shadow: 0 0 60px rgba(0,100,200,0.4);
+  }
+  #lock-notice h1 { font-size: 48px; margin-bottom: 10px; }
+  #lock-notice h2 { color: #7ee8ff; font-size: 22px; letter-spacing: 3px; margin-bottom: 20px; }
+  #lock-notice p { color: #60a8d0; font-size: 14px; line-height: 1.8; }
+  #lock-notice .click-hint {
+    margin-top: 30px; padding: 14px 36px;
+    background: linear-gradient(135deg, #004499, #0077cc);
+    border-radius: 40px; color: white; font-size: 15px; letter-spacing: 2px;
+    box-shadow: 0 0 30px rgba(0,150,255,0.5);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 30px rgba(0,150,255,0.5); }
+    50% { box-shadow: 0 0 50px rgba(0,200,255,0.8); }
+  }
+
+  /* Fish info tooltip */
+  #fish-info {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,20,60,0.8); backdrop-filter: blur(10px);
+    border: 1px solid rgba(100,200,255,0.3); border-radius: 14px;
+    padding: 10px 24px; color: #a0e8ff; font-size: 13px;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- Pointer lock notice -->
+<div id="lock-notice">
+  <div class="card">
+    <div style="font-size:64px; margin-bottom:16px">🌊</div>
+    <h2>🐠 ท้องทะเลมหัศจรรย์ 🐠</h2>
+    <p>🐡 สำรวจโลกใต้ทะเลอันสดใสด้วยการเดินไปรอบๆ<br>
+    🐙 พบกับปลาการ์ตูนสีสันสดใส ปะการังงดงาม และสัตว์ทะเลน่ารัก<br>
+    📸 อัปโหลดรูปภาพของคุณเพื่อแสดงในกรอบใต้ทะเล</p>
+    <div class="click-hint">🖱️ คลิกเพื่อเริ่มดำน้ำ!</div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <span><span class="key">W A S D</span> เดิน</span>
+  <span><span class="key">Mouse</span> มองรอบทิศ</span>
+  <span><span class="key">Space</span> ลอยขึ้น</span>
+  <span><span class="key">Shift</span> ดำลง</span>
+  <span><span class="key">ESC</span> ออก</span>
+</div>
+
+<!-- Crosshair -->
+<div id="crosshair"></div>
+
+<!-- Depth -->
+<div id="depth">🌊 ความลึก<span class="depth-val" id="depth-val">0 m</span></div>
+
+<!-- Fish info -->
+<div id="fish-info" id="fish-info">🐠 ปลาการ์ตูน Nemo</div>
+
+<!-- Upload Panel -->
+<div id="upload-panel">
+  <div class="bubble-deco">🐙</div>
+  <h3>📸 แกลเลอรี่ใต้ทะเล</h3>
+
+  <div class="upload-slot" id="slot1">
+    <input type="file" accept="image/*" onchange="handleUpload(event,1)">
+    <img class="preview-img" id="prev1">
+    <div class="slot-icon">🪸</div>
+    <div class="slot-label">กรอบที่ 1 - คลิกอัปโหลด</div>
+  </div>
+
+  <div class="upload-slot" id="slot2">
+    <input type="file" accept="image/*" onchange="handleUpload(event,2)">
+    <img class="preview-img" id="prev2">
+    <div class="slot-icon">🐚</div>
+    <div class="slot-label">กรอบที่ 2 - คลิกอัปโหลด</div>
+  </div>
+
+  <div class="upload-slot" id="slot3">
+    <input type="file" accept="image/*" onchange="handleUpload(event,3)">
+    <img class="preview-img" id="prev3">
+    <div class="slot-icon">⭐</div>
+    <div class="slot-label">กรอบที่ 3 - คลิกอัปโหลด</div>
+  </div>
+
+  <div class="divider"></div>
+  <button class="btn-place" onclick="placePhotosInWorld()">🌊 วางรูปในโลกใต้ทะเล</button>
+  <div style="font-size:10px; color:#407090; text-align:center; margin-top:8px;">รูปจะปรากฏบนกรอบใต้น้ำ</div>
+</div>
+
+<!-- Bubbles -->
+<div id="bubbles-overlay" id="bubbles-overlay"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// CANVAS TEXTURE HELPERS
+// ============================================================
+function makeCanvasTex(w, h, fn) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); fn(ctx, w, h);
+  return new THREE.CanvasTexture(c);
+}
+
+function sandTex() {
+  return makeCanvasTex(512, 512, (ctx, w, h) => {
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#c8a96e'); g.addColorStop(1,'#a07840');
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    for(let i=0;i<2000;i++){
+      ctx.fillStyle=`rgba(${Math.random()>0.5?180:100},${Math.random()>0.5?140:80},40,${Math.random()*0.4})`;
+      const s=Math.random()*3+1;
+      ctx.fillRect(Math.random()*w,Math.random()*h,s,s*0.5);
+    }
+  });
+}
+
+function waterTex() {
+  return makeCanvasTex(512, 512, (ctx, w, h) => {
+    const g = ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#001a4d'); g.addColorStop(0.5,'#003380'); g.addColorStop(1,'#001a4d');
+    ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle='rgba(100,180,255,0.15)'; ctx.lineWidth=1;
+    for(let i=0;i<20;i++){
+      ctx.beginPath();
+      for(let x=0;x<w;x+=8){
+        const y = (i/20)*h + Math.sin(x/30+i)*8;
+        x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  });
+}
+
+function coralTex(c1, c2) {
+  return makeCanvasTex(256, 256, (ctx, w, h) => {
+    ctx.fillStyle=c1; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle=c2;
+    for(let i=0;i<40;i++){
+      ctx.beginPath();
+      ctx.arc(Math.random()*w,Math.random()*h,Math.random()*15+5,0,Math.PI*2);
+      ctx.fill();
+    }
+  });
+}
+
+function rockTex() {
+  return makeCanvasTex(256,256,(ctx,w,h)=>{
+    const g=ctx.createRadialGradient(w/2,h/2,10,w/2,h/2,w/2);
+    g.addColorStop(0,'#888'); g.addColorStop(1,'#444');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    for(let i=0;i<60;i++){
+      ctx.fillStyle=`rgba(0,0,0,${Math.random()*0.3})`;
+      ctx.fillRect(Math.random()*w,Math.random()*h,Math.random()*20+2,Math.random()*4+1);
+    }
+  });
+}
+
+function makeFishTex(body, stripe, fin) {
+  return makeCanvasTex(256,128,(ctx,w,h)=>{
+    // body
+    ctx.fillStyle=body;
+    ctx.beginPath(); ctx.ellipse(w*0.45,h/2,w*0.38,h*0.42,0,0,Math.PI*2); ctx.fill();
+    // tail
+    ctx.fillStyle=fin;
+    ctx.beginPath(); ctx.moveTo(w*0.85,h/2);
+    ctx.lineTo(w,h*0.1); ctx.lineTo(w,h*0.9); ctx.closePath(); ctx.fill();
+    // stripes
+    ctx.strokeStyle=stripe; ctx.lineWidth=8;
+    for(let i=0;i<3;i++){
+      ctx.beginPath(); ctx.ellipse(w*(0.25+i*0.18),h/2,w*0.04,h*0.38,0,0,Math.PI*2);
+      ctx.stroke();
+    }
+    // eye
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(w*0.2,h*0.38,h*0.1,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(w*0.2,h*0.38,h*0.06,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(w*0.22,h*0.35,h*0.02,0,Math.PI*2); ctx.fill();
+    // fin top
+    ctx.fillStyle=fin; ctx.beginPath();
+    ctx.moveTo(w*0.3,h*0.08); ctx.quadraticCurveTo(w*0.45,h*(-0.1),w*0.6,h*0.08);
+    ctx.quadraticCurveTo(w*0.45,h*0.2,w*0.3,h*0.08); ctx.fill();
+  });
+}
+
+function jellyTex() {
+  return makeCanvasTex(128,128,(ctx,w,h)=>{
+    const g=ctx.createRadialGradient(w/2,h/3,5,w/2,h/3,w/2);
+    g.addColorStop(0,'rgba(255,150,255,0.9)'); g.addColorStop(1,'rgba(180,80,220,0.3)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(w/2,h/3,w/2.2,Math.PI,0); ctx.fill();
+    ctx.strokeStyle='rgba(255,180,255,0.6)'; ctx.lineWidth=2;
+    for(let i=0;i<6;i++){
+      ctx.beginPath(); ctx.moveTo(w*0.3+i*w*0.07,h*0.55);
+      ctx.bezierCurveTo(w*(0.25+i*0.07)+10,h*0.7,w*(0.2+i*0.07)-5,h*0.85,w*(0.25+i*0.07)+5,h);
+      ctx.stroke();
+    }
+  });
+}
+
+function turtleTex() {
+  return makeCanvasTex(256,256,(ctx,w,h)=>{
+    ctx.fillStyle='#2d7a2d';
+    ctx.beginPath(); ctx.ellipse(w/2,h/2,w*0.4,h*0.35,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#1a4d1a'; ctx.lineWidth=3;
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+      ctx.strokeRect(w*0.2+i*w*0.2,h*0.2+j*h*0.18,w*0.18,h*0.16);
+    }
+    // head
+    ctx.fillStyle='#3d9c3d';
+    ctx.beginPath(); ctx.ellipse(w*0.15,h/2,w*0.1,h*0.08,0,0,Math.PI*2); ctx.fill();
+    // flippers
+    for(const [fx,fy,rx,ry,rot] of [[w*0.3,h*0.15,w*0.2,h*0.08,-0.4],[w*0.3,h*0.85,w*0.2,h*0.08,0.4],[w*0.7,h*0.15,w*0.2,h*0.08,0.4],[w*0.7,h*0.85,w*0.2,h*0.08,-0.4]]){
+      ctx.save(); ctx.translate(fx,fy); ctx.rotate(rot);
+      ctx.fillStyle='#3d9c3d'; ctx.beginPath(); ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(w*0.12,h*0.47,w*0.015,0,Math.PI*2); ctx.fill();
+  });
+}
+
+function frameTex(label) {
+  return makeCanvasTex(512,384,(ctx,w,h)=>{
+    ctx.fillStyle='rgba(0,30,80,0.7)'; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle='rgba(100,200,255,0.6)'; ctx.lineWidth=8;
+    ctx.strokeRect(4,4,w-8,h-8);
+    ctx.strokeStyle='rgba(150,220,255,0.3)'; ctx.lineWidth=3;
+    ctx.strokeRect(14,14,w-28,h-28);
+    // corners
+    const cSize=30;
+    for(const [cx,cy] of [[0,0],[w,0],[0,h],[w,h]]){
+      ctx.strokeStyle='rgba(100,220,255,0.9)'; ctx.lineWidth=4;
+      ctx.beginPath();
+      ctx.moveTo(cx+(cx===0?0:-cSize),cy+(cy===0?cSize:0));
+      ctx.lineTo(cx+(cx===0?cSize:-cSize),cy+(cy===0?0:0));
+      ctx.stroke();
+    }
+    // label
+    ctx.fillStyle='rgba(100,220,255,0.5)';
+    ctx.font='bold 24px Arial'; ctx.textAlign='center';
+    ctx.fillText(label, w/2, h-18);
+    // placeholder fish icon
+    ctx.font='64px Arial'; ctx.fillStyle='rgba(100,180,255,0.3)';
+    ctx.fillText('🐠', w/2-32, h/2+20);
+    ctx.font='18px Arial'; ctx.fillStyle='rgba(150,200,255,0.4)';
+    ctx.fillText('คลิกอัปโหลดรูปจากแผง →', w/2, h/2+70);
+  });
+}
+
+function bubbleTex() {
+  return makeCanvasTex(64,64,(ctx,w,h)=>{
+    const g=ctx.createRadialGradient(w*0.4,h*0.35,2,w/2,h/2,w/2);
+    g.addColorStop(0,'rgba(220,240,255,0.9)'); g.addColorStop(0.4,'rgba(150,210,255,0.3)');
+    g.addColorStop(1,'rgba(100,180,255,0.05)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(w/2,h/2,w/2-2,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(180,230,255,0.6)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(w/2,h/2,w/2-2,0,Math.PI*2); ctx.stroke();
+  });
+}
+
+function seaweedTex() {
+  return makeCanvasTex(64,256,(ctx,w,h)=>{
+    const g=ctx.createLinearGradient(0,0,0,h);
+    g.addColorStop(0,'#1a8040'); g.addColorStop(1,'#0d4020');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='rgba(80,200,100,0.4)';
+    for(let i=0;i<8;i++){
+      ctx.beginPath(); ctx.ellipse(w/2+Math.sin(i)*8,h*0.1+i*h*0.1,w*0.25,h*0.06,Math.sin(i)*0.3,0,Math.PI*2); ctx.fill();
+    }
+  });
+}
+
+function starfishTex() {
+  return makeCanvasTex(128,128,(ctx,w,h)=>{
+    ctx.fillStyle='#e8603c';
+    ctx.beginPath();
+    for(let i=0;i<5;i++){
+      const a=i*Math.PI*2/5-Math.PI/2;
+      const a2=a+Math.PI/5;
+      ctx.lineTo(w/2+Math.cos(a)*w*0.45,h/2+Math.sin(a)*h*0.45);
+      ctx.lineTo(w/2+Math.cos(a2)*w*0.18,h/2+Math.sin(a2)*h*0.18);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.2)';
+    for(let i=0;i<20;i++){
+      ctx.beginPath(); ctx.arc(w*0.3+Math.random()*w*0.4,h*0.3+Math.random()*h*0.4,2,0,Math.PI*2); ctx.fill();
+    }
+  });
+}
+
+// ============================================================
+// SCENE SETUP
+// ============================================================
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.fog = new THREE.FogExp2(0x001840, 0.018);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x001030);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(0, 3, 0);
+
+// ============================================================
+// LIGHTING
+// ============================================================
+const ambient = new THREE.AmbientLight(0x0033aa, 0.5);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0x4488ff, 0.8);
+sun.position.set(10, 30, 10);
+sun.castShadow = true;
+scene.add(sun);
+
+// God rays (point lights)
+const rays = [[0x0088ff,0.6,[0,10,0]], [0x00aaff,0.4,[15,8,-10]], [0x0066cc,0.5,[-10,6,15]]];
+rays.forEach(([color, intensity, pos]) => {
+  const pl = new THREE.PointLight(color, intensity, 40);
+  pl.position.set(...pos); scene.add(pl);
+});
+
+// ============================================================
+// OCEAN FLOOR
+// ============================================================
+const floorGeo = new THREE.PlaneGeometry(200, 200, 50, 50);
+// slightly ripple the floor
+const pos = floorGeo.attributes.position;
+for(let i=0;i<pos.count;i++){
+  const x=pos.getX(i), z=pos.getZ(i);
+  pos.setY(i, Math.sin(x*0.2)*0.3 + Math.cos(z*0.15)*0.4 + (Math.random()-0.5)*0.3);
+}
+floorGeo.computeVertexNormals();
+const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({ map: sandTex() }));
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; scene.add(floor);
+
+// ============================================================
+// WATER SURFACE
+// ============================================================
+const waterGeo = new THREE.PlaneGeometry(200, 200, 30, 30);
+const waterMat = new THREE.MeshLambertMaterial({
+  map: waterTex(), color: 0x003399, transparent: true, opacity: 0.35, side: THREE.DoubleSide
+});
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.rotation.x = -Math.PI/2; water.position.y = 18; scene.add(water);
+
+// ============================================================
+// FISH FACTORY
+// ============================================================
+const fishData = [
+  { body:'#ff6622', stripe:'#fff', fin:'#ff4400', name:'ปลาการ์ตูน Nemo' },
+  { body:'#ffcc00', stripe:'#ff6600', fin:'#ff8800', name:'ปลาผีเสื้อ' },
+  { body:'#6688ff', stripe:'#fff', fin:'#4466ff', name:'ปลาทะเลสีฟ้า' },
+  { body:'#ff44aa', stripe:'#ffccee', fin:'#cc0077', name:'ปลาสีชมพู' },
+  { body:'#44dd88', stripe:'#fff', fin:'#22aa66', name:'ปลาสีเขียว' },
+  { body:'#ff8800', stripe:'#fff', fin:'#cc6600', name:'ปลานีโม่' },
+  { body:'#aa44ff', stripe:'#ddaaff', fin:'#7722cc', name:'ปลาสีม่วง' },
+  { body:'#ff3344', stripe:'#ffaaaa', fin:'#cc1122', name:'ปลากะพงแดง' },
+];
+
+const fishMeshes = [];
+function makeFish(fd, x, y, z) {
+  const tex = makeFishTex(fd.body, fd.stripe, fd.fin);
+  const geo = new THREE.PlaneGeometry(1.8, 0.9);
+  const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  mesh.userData = { name: fd.name, phase: Math.random()*Math.PI*2, speed: 0.5+Math.random()*1, 
+    radius: 4+Math.random()*8, centerX: x, centerZ: z, bobSpeed: 1+Math.random()*2, bobAmp: 0.3+Math.random()*0.5 };
+  scene.add(mesh);
+  fishMeshes.push(mesh);
+}
+
+for(let i=0;i<40;i++){
+  const fd = fishData[i%fishData.length];
+  const angle = (i/40)*Math.PI*2;
+  const r = 8+Math.random()*25;
+  makeFish(fd, Math.cos(angle)*r, 2+Math.random()*8, Math.sin(angle)*r);
+}
+
+// ============================================================
+// JELLYFISH
+// ============================================================
+const jellyMeshes = [];
+function makeJelly(x,y,z){
+  const tex = jellyTex();
+  const geo = new THREE.PlaneGeometry(1.5,1.5);
+  const mat = new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:0.05,side:THREE.DoubleSide});
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x,y,z);
+  m.userData = {phase:Math.random()*Math.PI*2, bob:1+Math.random()};
+  scene.add(m); jellyMeshes.push(m);
+}
+for(let i=0;i<12;i++) makeJelly((Math.random()-0.5)*40, 5+Math.random()*6, (Math.random()-0.5)*40);
+
+// ============================================================
+// TURTLE
+// ============================================================
+function makeTurtle(x,y,z){
+  const tex = turtleTex();
+  const geo = new THREE.PlaneGeometry(3,3);
+  const mat = new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:0.1,side:THREE.DoubleSide});
+  const m = new THREE.Mesh(geo,mat);
+  m.position.set(x,y,z);
+  m.userData = {phase:Math.random()*Math.PI*2, speed:0.2};
+  scene.add(m); return m;
+}
+const turtles = [makeTurtle(10,5,-5), makeTurtle(-15,7,10)];
+
+// ============================================================
+// CORALS
+// ============================================================
+function makeCoral(x,z,h,r,c1,c2){
+  for(let i=0;i<3;i++){
+    const geo = new THREE.CylinderGeometry(r*(0.5-i*0.1), r, h*(0.5+i*0.3), 6);
+    const mat = new THREE.MeshLambertMaterial({map:coralTex(c1,c2)});
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x+(i-1)*r*1.5, h*(0.25+i*0.1), z); m.castShadow=true; scene.add(m);
+  }
+}
+const coralColors = [['#ff4488','#ff88cc'],['#ff8800','#ffcc44'],['#44aaff','#88ddff'],['#ff3344','#ff8866'],['#aa44ff','#dd99ff']];
+for(let i=0;i<25;i++){
+  const cc = coralColors[i%coralColors.length];
+  const a = (i/25)*Math.PI*2; const r = 8+Math.random()*18;
+  makeCoral(Math.cos(a)*r+Math.random()*5,(Math.sin(a)*r+Math.random()*5),1.5+Math.random()*2.5,0.3+Math.random()*0.4,...cc);
+}
+
+// ============================================================
+// ROCKS
+// ============================================================
+for(let i=0;i<20;i++){
+  const geo = new THREE.DodecahedronGeometry(0.8+Math.random()*1.5,0);
+  const mat = new THREE.MeshLambertMaterial({map:rockTex()});
+  const m = new THREE.Mesh(geo,mat);
+  m.position.set((Math.random()-0.5)*60, 0.3+Math.random()*0.5, (Math.random()-0.5)*60);
+  m.rotation.set(Math.random(),Math.random(),Math.random()); m.castShadow=true; scene.add(m);
+}
+
+// ============================================================
+// SEAWEED
+// ============================================================
+for(let i=0;i<40;i++){
+  const tex = seaweedTex();
+  const geo = new THREE.PlaneGeometry(0.6, 2+Math.random()*2);
+  const mat = new THREE.MeshLambertMaterial({map:tex, transparent:true, alphaTest:0.1, side:THREE.DoubleSide});
+  const m = new THREE.Mesh(geo,mat);
+  m.position.set((Math.random()-0.5)*50, 1, (Math.random()-0.5)*50);
+  m.userData = {phase:Math.random()*Math.PI*2}; scene.add(m);
+}
+
+// ============================================================
+// STARFISH on floor
+// ============================================================
+for(let i=0;i<10;i++){
+  const tex = starfishTex();
+  const geo = new THREE.PlaneGeometry(1,1);
+  const mat = new THREE.MeshLambertMaterial({map:tex,transparent:true,alphaTest:0.1});
+  const m = new THREE.Mesh(geo,mat);
+  m.rotation.x=-Math.PI/2; m.position.set((Math.random()-0.5)*40, 0.05, (Math.random()-0.5)*40);
+  scene.add(m);
+}
+
+// ============================================================
+// BUBBLES (3D)
+// ============================================================
+const bubbleGeo = new THREE.SphereGeometry(0.12,8,8);
+const bubbleMat = new THREE.MeshLambertMaterial({map:bubbleTex(), transparent:true, opacity:0.6});
+const bubbleMeshes = [];
+for(let i=0;i<80;i++){
+  const m = new THREE.Mesh(bubbleGeo, bubbleMat);
+  m.position.set((Math.random()-0.5)*50, Math.random()*15, (Math.random()-0.5)*50);
+  m.userData = {speed:0.02+Math.random()*0.05, startY:Math.random()*15};
+  scene.add(m); bubbleMeshes.push(m);
+}
+
+// ============================================================
+// PHOTO FRAMES
+// ============================================================
+const frames = [];
+const framePositions = [[-12,4,8], [8,4,-12], [0,4,15]];
+const frameLabels = ['📸 กรอบที่ 1','📸 กรอบที่ 2','📸 กรอบที่ 3'];
+
+framePositions.forEach(([x,y,z], i) => {
+  const geo = new THREE.PlaneGeometry(4,3);
+  const mat = new THREE.MeshLambertMaterial({map:frameTex(frameLabels[i]), side:THREE.DoubleSide});
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x,y,z); m.lookAt(0,y,0);
+  // frame border
+  const borderGeo = new THREE.BoxGeometry(4.3,3.3,0.1);
+  const borderMat = new THREE.MeshLambertMaterial({color:0x004488});
+  const border = new THREE.Mesh(borderGeo,borderMat);
+  border.position.set(x,y,z); border.lookAt(0,y,0);
+  scene.add(border); scene.add(m);
+  frames.push({mesh:m, mat});
+});
+
+// ============================================================
+// PHOTO UPLOAD
+// ============================================================
+const uploadedTextures = [null,null,null];
+
+window.handleUpload = function(e, slot) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      // Update preview
+      const prev = document.getElementById('prev'+slot);
+      prev.src = ev.target.result; prev.style.display='block';
+      const slotEl = document.getElementById('slot'+slot);
+      slotEl.querySelector('.slot-icon').style.display='none';
+      slotEl.querySelector('.slot-label').textContent='✅ อัปโหลดแล้ว';
+      // Create THREE texture
+      const tex = new THREE.Texture(img); tex.needsUpdate=true;
+      uploadedTextures[slot-1] = tex;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+window.placePhotosInWorld = function() {
+  uploadedTextures.forEach((tex, i) => {
+    if(tex) {
+      frames[i].mat.map = tex; frames[i].mat.needsUpdate=true;
+    }
+  });
+  // Feedback
+  const btn = document.querySelector('.btn-place');
+  btn.textContent = '✅ วางรูปแล้ว!'; btn.style.background='linear-gradient(135deg,#006633,#00aa55)';
+  setTimeout(()=>{ btn.textContent='🌊 วางรูปในโลกใต้ทะเล'; btn.style.background=''; },2000);
+};
+
+// ============================================================
+// PLAYER CONTROLS
+// ============================================================
+let isLocked = false;
+let moveF=0,moveB=0,moveL=0,moveR=0,moveU=0,moveD=0;
+const euler = new THREE.Euler(0,0,0,'YXZ');
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const speed = 6;
+
+const lockNotice = document.getElementById('lock-notice');
+
+canvas.addEventListener('click', () => { if(!isLocked) canvas.requestPointerLock(); });
+document.addEventListener('pointerlockchange', () => {
+  isLocked = document.pointerLockElement === canvas;
+  lockNotice.style.opacity = isLocked ? '0' : '1';
+  lockNotice.style.pointerEvents = isLocked ? 'none' : 'auto';
+});
+
+document.addEventListener('mousemove', e => {
+  if(!isLocked) return;
+  euler.setFromQuaternion(camera.quaternion);
+  euler.y -= e.movementX * 0.002;
+  euler.x -= e.movementY * 0.002;
+  euler.x = Math.max(-Math.PI/2+0.01, Math.min(Math.PI/2-0.01, euler.x));
+  camera.quaternion.setFromEuler(euler);
+});
+
+document.addEventListener('keydown', e => {
+  switch(e.code){
+    case 'KeyW': moveF=1; break; case 'KeyS': moveB=1; break;
+    case 'KeyA': moveL=1; break; case 'KeyD': moveR=1; break;
+    case 'Space': moveU=1; e.preventDefault(); break;
+    case 'ShiftLeft': case 'ShiftRight': moveD=1; break;
+  }
+});
+document.addEventListener('keyup', e => {
+  switch(e.code){
+    case 'KeyW': moveF=0; break; case 'KeyS': moveB=0; break;
+    case 'KeyA': moveL=0; break; case 'KeyD': moveR=0; break;
+    case 'Space': moveU=0; break;
+    case 'ShiftLeft': case 'ShiftRight': moveD=0; break;
+  }
+});
+
+// ============================================================
+// CSS BUBBLES OVERLAY
+// ============================================================
+const bubblesOverlay = document.getElementById('bubbles-overlay');
+function spawnCSSBubble(){
+  const b = document.createElement('div'); b.className='bubble';
+  const size = 4+Math.random()*16;
+  b.style.cssText=`width:${size}px;height:${size}px;left:${Math.random()*100}%;bottom:0;
+    animation-duration:${4+Math.random()*8}s;animation-delay:${Math.random()*2}s`;
+  bubblesOverlay.appendChild(b);
+  setTimeout(()=>b.remove(), 12000);
+}
+setInterval(spawnCSSBubble, 300);
+
+// ============================================================
+// DEPTH DISPLAY
+// ============================================================
+const depthVal = document.getElementById('depth-val');
+
+// ============================================================
+// ANIMATE
+// ============================================================
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t = clock.elapsedTime;
+
+  // Player movement
+  if(isLocked){
+    direction.set(moveR-moveL, 0, moveB-moveF).normalize();
+    velocity.set(0,0,0);
+    if(moveF||moveB||moveL||moveR) {
+      velocity.x = direction.x; velocity.z = direction.z;
+      velocity.applyQuaternion(camera.quaternion);
+      velocity.y = 0; // flatten horizontal
+    }
+    if(moveU) velocity.y += 1;
+    if(moveD) velocity.y -= 1;
+    camera.position.addScaledVector(velocity, speed*dt);
+    // Clamp
+    camera.position.y = Math.max(0.5, Math.min(17, camera.position.y));
+    camera.position.x = Math.max(-90, Math.min(90, camera.position.x));
+    camera.position.z = Math.max(-90, Math.min(90, camera.position.z));
+    // Depth display
+    const depth = Math.round((17-camera.position.y)*3);
+    depthVal.textContent = depth+' m';
+  }
+
+  // Fish animation
+  fishMeshes.forEach(f=>{
+    const d=f.userData;
+    d.phase += dt*d.speed;
+    f.position.x = d.centerX + Math.cos(d.phase)*d.radius;
+    f.position.z = d.centerZ + Math.sin(d.phase)*d.radius*0.5;
+    f.position.y = d.phase*0+(Math.sin(t*d.bobSpeed+d.phase)*d.bobAmp+d.centerZ*0.05)
+      +(f.userData.centerZ*0); // keep original height
+    f.position.y = 2+Math.abs(Math.sin(t*d.bobSpeed*0.5+d.phase*0.3))*5+Math.sin(t*d.bobSpeed+d.phase)*d.bobAmp;
+    // face direction of travel
+    const vx = -Math.sin(d.phase)*d.radius;
+    const vz = Math.cos(d.phase)*d.radius*0.5;
+    f.rotation.y = Math.atan2(vx,vz)+Math.PI;
+    // Tilt swim
+    f.rotation.z = Math.sin(t*3+d.phase)*0.1;
+    // billboard vertical
+    f.lookAt(camera.position);
+  });
+
+  // Jellyfish
+  jellyMeshes.forEach(j=>{
+    j.userData.phase += dt*0.5;
+    j.position.y = 5 + Math.sin(t*j.userData.bob+j.userData.phase)*1.5;
+    j.lookAt(camera.position);
+  });
+
+  // Turtles
+  turtles.forEach((m,i)=>{
+    m.userData.phase = (m.userData.phase||0) + dt*0.15;
+    m.position.x = Math.cos(m.userData.phase+i)*18;
+    m.position.z = Math.sin(m.userData.phase+i)*12;
+    m.position.y = 4+Math.sin(t*0.5+i)*0.8;
+    m.lookAt(camera.position);
+  });
+
+  // Bubbles float up
+  bubbleMeshes.forEach(b=>{
+    b.position.y += b.userData.speed;
+    b.position.x += Math.sin(t+b.userData.startY)*0.005;
+    if(b.position.y > 18){ b.position.y = 0; b.position.x=(Math.random()-0.5)*50; b.position.z=(Math.random()-0.5)*50; }
+  });
+
+  // Water ripple
+  water.position.y = 18 + Math.sin(t*0.5)*0.2;
+  water.material.opacity = 0.3+Math.sin(t*0.3)*0.05;
+
+  // Seaweed sway
+  scene.children.forEach(c=>{
+    if(c.userData.phase!==undefined && c.geometry && c.geometry.type==='PlaneGeometry' && c.geometry.parameters.width===0.6){
+      c.rotation.z = Math.sin(t*1.5+c.userData.phase)*0.15;
+    }
+  });
+
+  // Frame frames rotate to face player
+  frames.forEach(f=>{
+    const p = f.mesh.position;
+    f.mesh.lookAt(camera.position.x, p.y, camera.position.z);
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ============================================================
+// RESIZE
+// ============================================================
+window.addEventListener('resize', ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
